@@ -1,0 +1,74 @@
+# Rebuild and publish the dashboard by hand or when its own code changes.
+#
+# Since 2026-10-08 the routine rebuild is NOT this workflow: detect.yml and
+# fold.yml run .github/actions/publish-dashboard as the last step of their own
+# job, after they push. This file used to fire on workflow_run after every
+# detect and fold (including 40-min-gated detect skips that changed nothing),
+# ~22 separately billed jobs a day, while Actions minutes paced at the Pro
+# plan's 3,000 a month. Pushes from the laptop and dashboard buttons that carry
+# records (decisions/, scores/, tailored/, applications/) trigger fold.yml,
+# which folds them and publishes; nothing else writes pipeline/jobs.sqlite.
+#
+# History of the triggers (routine-branch pushes dropped 2026-09-12, the
+# workflow_run escape from GITHUB_TOKEN pushes added 2026-08-18) is in git log.
+
+name: dashboard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - pipeline/dashboard.py
+      - pipeline/dashboard_assets/**
+      - .github/actions/publish-dashboard/**
+      - .github/workflows/dashboard.yml
+  workflow_dispatch:
+
+concurrency:
+  group: dashboard
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Job level so the deploy step's `if` can read it. A step's own env block is
+    # not visible to that step's own `if`.
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      # The stable URL Vaish opens. Not a secret (it is gated by Vercel
+      # Authentication, not by obscurity) and kept here rather than in a secret
+      # so the alias the workflow asserts is reviewable in the diff.
+      # SET THIS to your own Vercel team-scoped alias before enabling the deploy
+      # steps. The placeholder below is not a real host, so vercel_guard.py will
+      # refuse the preflight until it is replaced.
+      PROD_ALIAS: your-dashboard.vercel.app
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main          # jobs.sqlite is authoritative on main, always
+          # Shallow on purpose. This used to be fetch-depth: 0 "to reach the
+          # Routine branches", but the overlay below fetches those refs
+          # explicitly, so full history was never the mechanism — and it is a
+          # real cost at ~25 checkouts/day. (.git was 191 MB when this was
+          # written; the 2026-08-18 history rewrite cut it to ~9 MB, but
+          # shallow is still the right default for a build that only ever
+          # reads the tip.)
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - uses: ./.github/actions/publish-dashboard
+
+      - name: Summary
+        if: env.VERCEL_TOKEN == ''
+        run: |
+          {
+            echo "Not published: \`VERCEL_TOKEN\` is not set."
+            echo "The page is attached as the **dashboard** artifact on this run."
+            echo "To enable publishing, see \`docs/dashboard-hosting.md\`."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,381 @@
+/* The board: five stage columns, one card per job, two views of the same DOM.
+   Colour literals are not allowed in this file; everything comes from
+   tokens.css.
+
+   The thesis this phase adds to Task 2's: the only thing on this page that is
+   genuinely running out is TIME. Every card wears its freshness tier on the age
+   line -- a coloured dot and the tier named in words, in the tier's own colour
+   -- and nothing else on a card front carries colour except the status word.
+   Scanned at arm's length the board is a field of green and amber age lines,
+   which is the question Vaish opens it to answer.
+   It used to say that twice, adding a 3px tier-coloured spine down each card's
+   left edge. Removed 2026-08-23: the age line already carries the tier in a
+   colour, a shape and a word, and a border doing duty as a fourth copy made
+   every card read as flagged. The card's edge is a card edge again.
+
+   Mobile-first: the block stack IS the base rule and columns appear only once
+   there is width. Nothing is hidden to make a phone fit. */
+
+/* --- the board ---------------------------------------------------------- */
+.board { display: block; }
+.col + .col { margin-top: var(--space-4); }
+
+/* Tablet: whole columns scroll sideways, snapped so one never lands half-cut. */
+@media (min-width: 641px) {
+  .board { display: grid; grid-auto-flow: column;
+           grid-auto-columns: minmax(272px, 1fr); gap: var(--space-3);
+           align-items: start; overflow-x: auto; scroll-snap-type: x proximity;
+           padding-bottom: var(--space-2); }
+  .col { scroll-snap-align: start; }
+  .col + .col { margin-top: 0; }
+}
+/* Desktop: all five fit, so nothing scrolls sideways and the stage headings can
+   stick -- the Decide column runs to 192 cards and a heading that scrolls away
+   makes the other four unidentifiable halfway down. */
+@media (min-width: 1200px) {
+  .board { grid-auto-columns: minmax(0, 1fr); overflow-x: visible; }
+  .colhead { position: sticky; top: 0; z-index: 3; }
+}
+
+/* --- a column ----------------------------------------------------------- */
+/* The slab is the .rail vocabulary this page already spoke, so the board reads
+   as the same instrument. Drained on the two columns Vaish cannot act in:
+   waiting-on-scoring belongs to the cloud Routine, submitted is already gone.
+   Same structure, no invitation. */
+.colhead { display: flex; align-items: baseline; gap: var(--space-2);
+           background: var(--board); color: var(--board-ink);
+           padding: 6px var(--space-3); border-radius: var(--radius-1); }
+.colhead h2 { font-size: var(--text-md); letter-spacing: .11em;
+              text-transform: uppercase; margin: 0; font-weight: 600; }
+.colhead .n { margin-left: auto; font-size: var(--text-md); color: var(--board-ink);
+              font-weight: 700; }
+.col[data-col="waiting"] .colhead, .col[data-col="out"] .colhead {
+              background: var(--board-drained); }
+.csub { margin: var(--space-2) 0 0; font-size: var(--text-sm); color: var(--muted); }
+.csub b { color: var(--ink); }
+.cards { display: flex; flex-direction: column; gap: var(--space-2);
+         margin-top: var(--space-2); }
+.cards:empty { margin-top: 0; }
+/* The Submitted column's three sub-stages. An empty one still draws its header:
+   "Interviewing 0" is the state of the search, not a gap in the page. */
+.grp + .grp { margin-top: var(--space-3); }
+/* Scoped to .grp: `.sub` is also the h1's subtitle span, and an unscoped rule
+   here would uppercase the page heading's tail. */
+.grp > .sub { display: flex; align-items: baseline; gap: var(--space-2); margin: 0;
+       padding: var(--space-2) 2px 3px; font-size: var(--text-sm); font-weight: 600;
+       letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+       border-bottom: 1px solid var(--rule); }
+.grp > .sub .n2 { margin-left: auto; color: var(--ink); }
+/* Decide's collapsed "Scorer skipped" group: the same header, inside <summary>. */
+.grp.aside > summary { list-style: none; cursor: pointer; }
+.grp.aside > summary::-webkit-details-marker { display: none; }
+.grp.aside > summary > .sub { display: flex; align-items: baseline; gap: var(--space-2); margin: 0;
+       padding: var(--space-2) 2px 3px; font-size: var(--text-sm); font-weight: 600;
+       letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+       border-bottom: 1px solid var(--rule); }
+.grp.aside > summary > .sub::before { content: "B8"; }
+.grp.aside[open] > summary > .sub::before { content: "BE"; }
+.grp.aside > summary > .sub .n2 { margin-left: auto; color: var(--ink); }
+/* Server-rendered only when the column is genuinely empty. "Nothing is here"
+   and "your query found nothing" are different sentences and this is the first. */
+.hint { margin: var(--space-2) 0 0; padding: var(--space-3);
+        border: 1px dashed var(--rule); border-radius: var(--radius-1);
+        color: var(--muted); font-size: var(--text-lg); }
+.showmore { display: block; width: 100%; margin-top: var(--space-2); font: inherit;
+            font-size: var(--text-md); padding: 7px; cursor: pointer;
+            color: var(--muted); background: var(--sunk);
+            border: 1px solid var(--rule-strong); border-radius: var(--radius-1); }
+.showmore:hover { background: var(--card); color: var(--ink); }
+.showmore:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.showmore[hidden] { display: none; }
+
+/* --- a card ------------------------------------------------------------- */
+/* Two grid columns: everything spans both except the fit score, pinned top
+   right beside the company. Placement is explicit on every child, so a card
+   with no score, no location or no files shifts nothing. */
+/* One uniform 1px edge. The card used to carry a 3px tier-coloured spine down
+   its left side as well, which said nothing the card did not already say twice
+   over -- the age line names the tier in words AND wears the tier dot. A border
+   that encodes data is a border that cannot also just be a border: it made every
+   card look flagged, and it spent the page's loudest remaining position on a
+   third copy of one field. */
+.card { display: grid; grid-template-columns: minmax(0, 1fr) auto;
+        gap: 2px var(--space-2); align-items: baseline;
+        padding: 9px 11px 8px; background: var(--card);
+        border: 1px solid var(--rule);
+        border-radius: var(--radius-1); }
+.card > * { grid-column: 1 / -1; min-width: 0; }
+.card > .co { grid-column: 1; }
+.card > .sc { grid-column: 2; grid-row: 1; justify-self: end; }
+.card:hover { background: var(--hover); }
+/* `.hide` = does not match the filter. `[hidden]` = behind the column cap.
+   Both need saying explicitly, because the display:grid above outranks the UA
+   stylesheet's [hidden] rule and would leave every capped card on screen. */
+.card.hide, .card[hidden] { display: none; }
+
+.card .co { font-weight: 600; }
+.card .sc { font-family: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas,
+            monospace; font-weight: 700; font-size: 13px; padding: 0 7px;
+            background: var(--sunk); border-radius: var(--radius-2); }
+.card .ro { font-size: var(--text-lg); overflow-wrap: anywhere; }
+.card .loc { font-size: var(--text-sm); color: var(--muted); overflow-wrap: anywhere; }
+/* --- the keyword-coverage badge ----------------------------------------- */
+/* Form, colour rule, measured contrast: dashboard.ats_meter/ats_badge. Meter:
+   ::before fill, ::after cell dividers (an overlay), --ats-c the bucket hue.
+   The ceiling tick is gone with the honest-ceiling figure it drew. */
+.ats { display: flex; flex-wrap: wrap; align-items: center; gap: 2px var(--space-2);
+       margin-top: 5px; font-size: var(--text-md); color: var(--muted); }
+.ats b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+.atsq { text-decoration: none; }
+.atsq:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px;
+       border-radius: 3px; }
+.atsm { position: relative; display: inline-block; width: 60px; height: 8px;
+       background: var(--sunk); border: 1px solid var(--rule-strong);
+       border-radius: 2px; overflow: hidden; }
+.atsm::before, .atsm::after { content: ""; }
+.atsm::before, .atsm::after { position: absolute; top: 0; bottom: 0; }
+.atsm::before { left: 0; width: clamp(0%, calc(var(--r, 0) * 1%), 100%);
+       background: var(--ats-c, var(--muted)); }
+.atsm::after { left: 0; right: 0;
+       background: repeating-linear-gradient(90deg, transparent 0 calc(20% - 2px),
+       var(--rule-strong) calc(20% - 2px) 20%); }
+/* The bucket is the review's keyword percentage (dashboard.ats_bucket), so
+   every measured badge has one. --muted survives as the fallback for a badge
+   whose key CSS does not know, which should mean a stylesheet lagging the
+   generator and nothing else. */
+.ats[data-b="low"]  { --ats-c: var(--ats-low); }
+.ats[data-b="mid"]  { --ats-c: var(--ats-mid); }
+.ats[data-b="high"] { --ats-c: var(--ats-high); }
+/* Files are the point of the whole pipeline, so they are the one thing on a
+   card that looks pressable at any width -- never a bare underlined word that
+   a thumb has to hunt for. */
+.card .lk { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: 5px; }
+.card .lk a { display: inline-flex; align-items: center; min-height: 28px;
+              padding: 2px 9px; font-size: var(--text-md); text-decoration: none;
+              border: 1px solid var(--rule-strong); border-radius: var(--radius-2); }
+.card .lk a:hover { background: var(--sunk); }
+.card .lk a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Below 641px the pointer is a thumb and the board is the ONLY view, so 28px
+   was the whole phone experience of the one control that opens a resume. Grown
+   in PADDING, never in type size: the link's job is to be hit, and a bigger
+   word would push the card's own reading order around to say nothing new. */
+@media (max-width: 640px) {
+  .card .lk a { min-height: 44px; padding: 11px 14px; }
+}
+/* The action zone. decisions.js finds it as `.stt` and appends its pending
+   badge here; app.js lifts the whole card out of the column into the tray from
+   the same hook -- so the class is a contract, not a style name. */
+.card .stt { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line);
+             font-size: var(--text-md); }
+.card .stt > b { font-size: var(--text-sm); letter-spacing: .05em;
+                 text-transform: uppercase; }
+
+/* --- W6: what to check before sending, open on the card ------------------ */
+/* From brief.md: the claims the tailor inferred beyond the written record, and
+   the first reviewer ask nobody has put to Vaish yet. "Not stated" is amber:
+   the brief never said, which is a reason to open it, not a clean bill. */
+.verify { grid-column: 1 / -1; margin-top: 6px; font-size: var(--text-md); }
+.verify .vf { margin-top: 2px; }
+.verify .vf > b { font-size: var(--text-sm); }
+.verify ul { margin: 2px 0 0; padding-left: 16px; }
+.verify li { margin: 1px 0; }
+.verify .none { color: var(--muted); }
+.verify .unstated { color: var(--warn); }
+
+/* --- the fold: why, rather than what now -------------------------------- */
+.more { grid-column: 1 / -1; margin-top: 5px; }
+.more summary { font-size: var(--text-sm); color: var(--muted); cursor: pointer; }
+.more summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.more p { margin: 5px 0 0; font-size: var(--text-md); color: var(--muted); }
+/* Full width in here, unlike the 128px it had in the table: the 24h and 48h
+   ticks are the whole reason to draw an interval rather than print a number. */
+.more .bar { display: block; max-width: none; margin-top: 7px; }
+
+/* --- the age bar: the one place this page spends any ink ---------------- */
+/* The track carries the 24h and 48h ticks in its own background, which frees
+   ::before and ::after for the two halves of the interval: the solid part is
+   the age the posting is AT LEAST, the hatched part is how much older it could
+   still be. --a and --b come from the card; nothing else is per-card markup. */
+.bar { position: relative; display: inline-block; width: 100%; max-width: 128px;
+       height: 9px; border-radius: 2px; overflow: hidden; vertical-align: middle;
+       background: linear-gradient(90deg, transparent 33.33%,
+       var(--rule-strong) 33.33% 34.2%, transparent 34.2% 66.66%,
+       var(--rule-strong) 66.66% 67.5%, transparent 67.5%), var(--sunk); }
+.bar::before, .bar::after { content: ""; position: absolute; top: 0; height: 100%; }
+.bar::before { left: 0; width: var(--a, 0%); background: var(--tier-c, var(--muted)); }
+.bar::after { left: var(--a, 0%); width: var(--b, 0%); opacity: .8;
+       background: repeating-linear-gradient(135deg,
+       var(--tier-c, var(--muted)) 0 2px, transparent 2px 4px); }
+.bar-none { background: repeating-linear-gradient(135deg, var(--rule) 0 3px,
+       var(--line) 3px 6px); }
+.bar-none::before, .bar-none::after { content: none; }
+/* Tier is a CATEGORY of time window, so the four values differ in hue, not in
+   intensity. --tier-c is still live and still earns its keep: the age dot
+   (.age-txt::before) and both halves of the age bar (.bar::before/::after) read
+   it. Only the card's left border stopped. The dot and the bar take the full
+   tier colour (non-text, 3:1); the TEXT falls back to --dead for nodate and
+   stale, which clear AA where --tier-nodate and --tier-stale do not. */
+[data-tier="now"]    { --tier-c: var(--tier-now); }
+[data-tier="soon"]   { --tier-c: var(--tier-soon); }
+[data-tier="stale"]  { --tier-c: var(--tier-stale); }
+[data-tier="nodate"] { --tier-c: var(--tier-nodate); }
+.age-txt { font-size: var(--text-sm); color: var(--muted); white-space: nowrap;
+           font-family: ui-monospace, "Cascadia Mono", "SF Mono", Menlo, Consolas,
+           monospace; }
+[data-tier="now"] .age-txt { color: var(--tier-now); font-weight: 600; }
+[data-tier="soon"] .age-txt { color: var(--tier-soon); }
+[data-tier="nodate"] .age-txt, [data-tier="stale"] .age-txt { color: var(--dead); }
+.card .age-txt::before { content: ""; display: inline-block; width: 7px; height: 7px;
+           border-radius: 50%; margin-right: 5px;
+           background: var(--tier-c, var(--muted)); }
+
+/* Application deadline read from the JD (10-15). Text, not colour alone. */
+.deadline { font-size: var(--text-sm); font-weight: 600; color: inherit; }
+.deadline.soon { color: var(--warn); }
+.deadline.past { color: var(--dead); font-weight: 400; }
+
+/* --- status, verdict, notes -------------------------------------------- */
+.st-tailored { color: var(--go); font-weight: 600; }
+.st-needs_review { color: var(--warn); font-weight: 600; }
+.st-stale_skip, .st-skipped, .st-baseline_skip { color: var(--dead); }
+.st-applied, .st-interview, .st-offer { color: var(--info); font-weight: 600; }
+/* The review readout: `ATS 82 . R 8 . HM 7`, coloured by min(recruiter, hm)
+   (dashboard.review_html). Old folders print their legacy critic verdict here
+   in the same two pass/fail colours. */
+.verdict { font-size: var(--text-md); margin-top: 5px; }
+.verdict a { color: inherit; }
+.verdict.pass { color: var(--go); font-weight: 700; }
+.verdict.warn { color: var(--warn); font-weight: 700; }
+.verdict.fail { color: var(--fail); font-weight: 700; }
+/* The local Word page check's count. */
+.wpg { font-size: var(--text-sm); color: var(--muted); margin-top: 5px; }
+.pending { font-size: var(--text-sm); color: var(--cloud); font-weight: 600; margin-top: 2px; }
+.src { display: inline; margin-left: 6px; font-size: 10px; color: var(--muted);
+       letter-spacing: .03em; font-weight: 400; }
+/* A 5-year role tailored into a spare slot (worklist stretch fill). */
+.stretch { font-size: var(--text-sm); color: var(--muted); font-style: italic; margin-top: 2px; }
+
+/* --- list view: same DOM, one row per job ------------------------------- */
+/* Not the table coming back: the columns stay real stages, stacked full width,
+   and each card lays its own children out in a line. CSS only, so nothing
+   about the board's contract with the client changes when it is on. */
+/* 861, not 641 (2026-08-23, second live pass): the row's minimum tracks plus
+   gaps measure 844px, so between 641 and 860 the list grid overflowed the page
+   sideways with the file pills off-screen -- the exact clip the minmax() pass
+   fixed at 1,000px, surviving one floor lower. Below 861 these rules simply do
+   not exist and the board layout, which fits, is the only view; controls.css
+   hides the toggle at the same boundary so it cannot claim otherwise. 861 is
+   the complement of the max-width: 860px block controls.css already keeps. */
+@media (min-width: 861px) {
+  .board[data-view=list] { display: block; overflow-x: visible; }
+  .board[data-view=list] .col + .col { margin-top: var(--space-4); }
+  .board[data-view=list] .cards { gap: 0; }
+  /* Only the role title grows. Everything else is measured to its longest real
+     value, so the row does not open a lake of whitespace between the age and
+     the status the way an all-fr template does. */
+  /* Two tracks re-measured against the PUBLISHED build (2026-08-23); the
+     geometry had only ever been checked on the local one, which renders no
+     buttons. .stt 116 -> 158px: it now holds a 44px primary beside a 44px
+     overflow trigger, and rows are taller for it -- a touch target is the
+     point. .age-txt 116 -> 168px: nowrap text whose longest dated reading
+     measures 160px, so at 116 it PAINTED OVER the ATS cell ("still wor45/24")
+     in both builds, at HEAD, since the list view shipped. Both paid for out of
+     the role title, the one track with slack. */
+  /* .ats 68 -> 170px (2026-08-23): a 5-char fraction became a sentence, a
+     number and a meter. Paid for out of the role title, again the one track
+     with slack; fixed tracks sum to 1,216 of 1,425 at 1440.
+     Those four FIXED tracks became minmax() the same day, after the live pass
+     (2026-08-23): their minima plus the gaps summed to ~1,216px, and the widest
+     viewport this page is actually read on is 1,054 -- so switching to List put
+     the file links, the one thing a row exists to hand you, behind a
+     page-level horizontal scrollbar that is easy to miss entirely. The maxima
+     are unchanged, so a wide screen renders exactly what it did; the minima are
+     what a 1,000px window falls back to, and every cell that shrinks has
+     somewhere to put the overflow (age and role ellipsis, the badge and the
+     file pills wrap). Nothing is hidden to make it fit, which is the same rule
+     the mobile stack follows. */
+  .board[data-view=list] .card {
+      grid-template-columns: 2.4rem minmax(72px, .9fr) minmax(120px, 2.4fr)
+      minmax(64px, .8fr) minmax(96px, 168px) minmax(120px, 170px)
+      minmax(130px, 158px) minmax(96px, 206px);
+      align-items: center; gap: 0 var(--space-3); border-radius: 0;
+      border-top-width: 0; padding: 5px 11px; }
+  /* Wraps rather than clips: below ~1,150px the pill group is the track that
+     runs out of room first, and a second line of pills costs a few pixels of
+     row height while a clipped one costs the link. */
+  .board[data-view=list] .card .lk { flex-wrap: wrap; }
+  .board[data-view=list] .card .lk a { min-height: 22px; padding: 1px 7px; }
+  .board[data-view=list] .cards > .card:first-child { border-top-width: 1px; }
+  .board[data-view=list] .card > .sc { grid-column: 1; grid-row: 1; justify-self: start; }
+  .board[data-view=list] .card > .co { grid-column: 2; grid-row: 1; }
+  .board[data-view=list] .card > .ro { grid-column: 3; grid-row: 1; }
+  .board[data-view=list] .card > .loc { grid-column: 4; grid-row: 1; }
+  .board[data-view=list] .card > .age-txt { grid-column: 5; grid-row: 1; }
+  .board[data-view=list] .card > .ats { grid-column: 6; grid-row: 1; }
+  /* Two short lines, nothing dropped: same badge in both views. */
+  .board[data-view=list] .card > .ats { align-content: center; }
+  .board[data-view=list] .card > .stt { grid-column: 7; grid-row: 1;
+      margin-top: 0; padding-top: 0; border-top: 0; }
+  .board[data-view=list] .card > .lk { grid-column: 8; grid-row: 1; margin-top: 0; }
+  /* The review readout (on the face since 10-16) sits under the ATS cell. */
+  .board[data-view=list] .card > .verdict { grid-column: 6; grid-row: 2; margin-top: 1px; }
+  .board[data-view=list] .card > .verify { grid-column: 1 / -1; grid-row: 3; margin-top: 1px; }
+  .board[data-view=list] .card > .more { grid-column: 1 / -1; grid-row: 4; margin-top: 1px; }
+  .board[data-view=list] .card .ro,
+  .board[data-view=list] .card .loc { overflow: hidden; text-overflow: ellipsis;
+      white-space: nowrap; }
+  /* The undated rows say "age unknown . no posting date" (199px, the same
+     sentence twice), so those alone ellipsis rather than buy 31px from every
+     other column. Clipping is the fallback; the collision was the defect. */
+  .board[data-view=list] .card .age-txt { overflow: hidden; text-overflow: ellipsis; }
+}
+
+/* --- the archive: a footer, not a section you work in ------------------- */
+.archive { background: var(--card); border: 1px solid var(--rule);
+           border-radius: var(--radius-1); padding: var(--space-2) var(--space-3);
+           margin-top: var(--space-4); font-size: var(--text-lg); color: var(--muted); }
+.archive summary { cursor: pointer; }
+.archive summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.archive summary b { color: var(--ink); }
+.archive .n { font-variant-numeric: tabular-nums; }
+.anote { margin: var(--space-3) 0 0; max-width: 70ch; }
+.anote b { color: var(--ink); }
+.tally { margin: var(--space-2) 0 0; padding-left: 20px; }
+.tally b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.gonelist { list-style: none; margin: var(--space-2) 0 0; padding: 0; }
+.gone { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2);
+        padding: 5px 0; border-top: 1px solid var(--line); }
+.gone .sc { font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.gone .co { font-weight: 600; color: var(--ink); }
+.gone .ro { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }
+/* Recently closed: the same row shape, one field different. These rows left the
+   board by a DECISION rather than by expiring, so the word for what happened is
+   the field the eye should land on, and it is set the way a card sets its own
+   status word. The two disclosures stack as one block, so the second opens at
+   the tighter --space-2 rather than restarting the section. */
+.closed .cst { font-size: var(--text-sm); letter-spacing: .05em;
+               text-transform: uppercase; }
+.closed .cst b { color: var(--ink); font-weight: 600; }
+.closedlist + .archive { margin-top: var(--space-2); }
+
+/* --- open attestations: a standing constraint, not an incident ---------- */
+/* In the archive <aside> since 2026-08-23 (rationale in dashboard.py). Amber
+   EDGE on a card fill, not the amber slab it wore in the header: it still says
+   "unresolved", it no longer competes with the health strip for "now". */
+.attest { background: var(--card); border: 1px solid var(--warn);
+          border-radius: var(--radius-1); padding: var(--space-2) var(--space-3);
+          margin-top: var(--space-2); font-size: var(--text-lg); color: var(--muted); }
+.attest summary { cursor: pointer; }
+.attest summary b { color: var(--warn); }
+.attest summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.attest ul { margin: var(--space-2) 0 0; padding-left: 20px; color: var(--muted); }
+/* The honest-failure branch is a <div>, never a <details>: a readout that hides
+   its own breakage is how the breakage survives. */
+div.attest { color: var(--ink); border-color: var(--fail); background: var(--fail-bg); }
+div.attest b { color: var(--fail); }
+
+#nohits { display: none; margin-top: var(--space-3); padding: 22px 14px;
+          background: var(--card); border: 1px solid var(--rule);
+          border-radius: var(--radius-1); color: var(--muted); }
+#nohits.on { display: block; }
+#nohits b { color: var(--ink); }

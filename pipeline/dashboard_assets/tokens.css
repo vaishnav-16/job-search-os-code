@@ -1,0 +1,187 @@
+
+/* =====================================================================
+   Design tokens. This is the ONLY file in dashboard_assets that is
+   allowed to contain a colour literal; every other stylesheet consumes
+   these names. Gate: no #hex / rgb() / hsl() in base|board|controls.
+
+   The thesis: this page is an instrument, not a document. The field is
+   cool neutral, and the ONLY warm colour on it is the amber/copper
+   family. Warmth therefore means one thing everywhere -- the clock is
+   running (soon, warn, attention, focus). A page that is entirely cool
+   is a page with nothing to act on today.
+
+   Two colour FAMILIES coexist on one card:
+     - freshness tier = a CATEGORICAL ramp across hues (green/amber/
+       slate), because a time window is a category, not a magnitude;
+     - ATS coverage  = a three-step SEMANTIC ramp (green / neutral teal /
+       amber) since 2026-08-23, when the badge stopped grading a ratio
+       and started counting the terms still left to add. An ordinal ramp
+       in one hue was right for an intensity; this is outstanding WORK,
+       so it ends in amber like everything else on the page that is
+       asking for some.
+   The green and the amber are therefore shared with the state family on
+   purpose -- green reads "fine", amber reads "there is something to do"
+   in both -- and no badge relies on colour alone: it prints its word and
+   its count beside the meter. Fill-vs---sunk contrast is measured in
+   dashboard.ats_meter's comment; the middle step is the weak one.
+
+   Both themes are written out in full and tuned independently. Dark is
+   NOT a computed inversion of light: perceived separation between
+   surfaces compresses at low luminance, so the card->sunk step is
+   deliberately larger in dark, and every state colour is re-picked for
+   its own background rather than lightened by formula.
+   ===================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* --- neutrals ------------------------------------------------------ */
+  --ink:    #101620;   /* primary text */
+  --paper:  #eef1f6;   /* the page field */
+  --card:   #ffffff;   /* raised surface: bands, table, panels */
+  --sunk:   #e3e9f1;   /* secondary surface: thead, chips, fields, bar track */
+  --hover:  #f4f7fa;   /* row / button hover wash */
+  --rule:   #d3dae5;   /* soft divider: panel + band edges (decorative) */
+  --rule-strong: #7a8391; /* the edge of an INTERACTIVE control -- >=3:1 on
+                             card, paper and sunk, per WCAG 1.4.11. Panels
+                             keep the soft --rule: a container is read from
+                             its fill, a control from its outline. */
+  --line:   #eceff5;   /* hairline between rows */
+  --muted:  #59636f;   /* secondary text -- AA on paper, card and sunk */
+  --dead:   #636c7a;   /* drained text: closed, skipped, stale */
+  --link:   #0f56a8;   /* anchors */
+  --accent: #9c5406;   /* focus rings, sort arrows -- the warm signal */
+
+  /* The section rail is a slab with its own text colour, so --board
+     carries a small pair-set the way the state colours carry -bg. */
+  --board:         #1a2230;
+  --board-ink:     #f2f6fb;
+  --board-muted:   #9fb2c8;
+  --board-drained: #636e7e;  /* the archive rail: same slab, drained. 3.09:1
+                                from --board here; in DARK that separation is
+                                geometrically unreachable (a partner 3:1 below
+                                a rail this dark would need negative luminance),
+                                so the dark value carries the difference in
+                                CHROMA instead -- neutral grey against the
+                                board's blue slate. Both rails also carry their
+                                own words, which the filter chips do not. */
+
+  /* --- state --------------------------------------------------------- */
+  --go:      #086b31;  --go-bg:   #e4f4ea;
+  --warn:    #8a5a06;  --warn-bg: #fdf1de;
+  --fail:    #a8001c;  --fail-bg: #fdeaea;
+  --info:    #1a4a8c;
+  --cloud:   #61439c;
+
+  /* --- freshness tier (categorical: hue carries the meaning) --------- */
+  /* now/soon are used as TEXT (.age-txt) and must hold AA.
+     nodate/stale are bar fill only -- stale text uses --dead. */
+  --tier-now:    #0d6b3a;
+  --tier-soon:   #8a5a06;
+  --tier-nodate: #6f7f95;
+  --tier-stale:  #7f858e;
+
+  /* --- ATS coverage (semantic: how much is left to add) -------------- */
+  /* low = few terms left (green, same as --go), mid = the unjudged
+     middle (teal, the one hue no other token occupies), high = worth
+     another tailor pass (amber, the page's one warm signal). The ATS
+     number itself still gates nothing, so its text stays --muted. */
+  --ats-low:  #086b31;
+  --ats-mid:  #3d97a0;
+  --ats-high: #8a5a06;
+
+  /* --- metrics (theme-independent) ----------------------------------- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 22px;
+  --radius-1: 5px;   /* panels, bands, clocks */
+  --radius-2: 11px;  /* pills: chips and filter toggles */
+  --text-sm: 11px;   /* micro labels */
+  --text-md: 12px;   /* meta, dense cells */
+  --text-lg: 13px;   /* secondary body */
+}
+
+/* Dark under the OS preference, UNLESS the reader has explicitly asked
+   for light. The :not() is what lets the toggle win in that direction. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+
+    --ink:    #e6ecf4;
+    --paper:  #0e1218;
+    --card:   #171d26;
+    --sunk:   #232c3a;
+    --hover:  #1e2632;
+    --rule:   #303a48;
+    --rule-strong: #6e7b8c;
+    --line:   #232b36;
+    --muted:  #a3b0c1;
+    --dead:   #8b97a8;
+    --link:   #7fb4f5;
+    --accent: #e3993f;
+
+    --board:         #2a3547;
+    --board-ink:     #eef3fa;
+    --board-muted:   #a7b7cc;
+    --board-drained: #171a1f;
+
+    --go:      #58d08a;  --go-bg:   #10281c;
+    --warn:    #e8ae4e;  --warn-bg: #2c2110;
+    --fail:    #ff8087;  --fail-bg: #331418;
+    --info:    #79b0f0;
+    --cloud:   #b598ea;
+
+    --tier-now:    #58d08a;
+    --tier-soon:   #e0a444;
+    --tier-nodate: #7e8fa6;
+    --tier-stale:  #7c828b;
+
+    --ats-low:  #58d08a;
+    --ats-mid:  #2c8a94;
+    --ats-high: #e8ae4e;
+  }
+}
+
+/* The explicit dark choice. Written as :root[data-theme="dark"] (0,2,0)
+   rather than bare [data-theme="dark"] (0,1,0) so it outranks :root on
+   SPECIFICITY, not merely on source order -- and placed after the media
+   block so it also outranks the equally-specific :root:not(...) above.
+   Values are duplicated rather than @extend-ed because CSS has no such
+   thing and a second media query cannot re-target an attribute. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --ink:    #e6ecf4;
+  --paper:  #0e1218;
+  --card:   #171d26;
+  --sunk:   #232c3a;
+  --hover:  #1e2632;
+  --rule:   #303a48;
+  --rule-strong: #6e7b8c;
+  --line:   #232b36;
+  --muted:  #a3b0c1;
+  --dead:   #8b97a8;
+  --link:   #7fb4f5;
+  --accent: #e3993f;
+
+  --board:         #2a3547;
+  --board-ink:     #eef3fa;
+  --board-muted:   #a7b7cc;
+  --board-drained: #171a1f;
+
+  --go:      #58d08a;  --go-bg:   #10281c;
+  --warn:    #e8ae4e;  --warn-bg: #2c2110;
+  --fail:    #ff8087;  --fail-bg: #331418;
+  --info:    #79b0f0;
+  --cloud:   #b598ea;
+
+  --tier-now:    #58d08a;
+  --tier-soon:   #e0a444;
+  --tier-nodate: #7e8fa6;
+  --tier-stale:  #7c828b;
+
+  --ats-low:  #58d08a;
+  --ats-mid:  #2c8a94;
+  --ats-high: #e8ae4e;
+}

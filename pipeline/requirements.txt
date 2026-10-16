@@ -1,0 +1,6 @@
+# Layer 1 dependencies for the GitHub Actions runner (Python 3.12 — pinned in
+# detect.yml because python-jobspy pins NUMPY==1.26.3, which has no 3.13 wheel;
+# on 3.12 the wheel exists and a plain install works).
+requests>=2.31
+PyYAML>=6.0
+python-jobspy>=1.1.75

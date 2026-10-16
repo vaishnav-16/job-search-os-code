@@ -1,0 +1,60 @@
+# This repository is the public, code-only copy of a private pipeline. The
+# entries below are not housekeeping: they are the barrier that stops private
+# data from arriving here if someone ever pulls or copies from the private
+# repo into this tree. Additions are welcome; removals need a reason.
+
+# ---- secrets and local state ----
+.env
+*.env
+pipeline/.env
+*.log
+sync_state.json
+pipeline/sync_state.json
+
+# ---- databases and generated artifacts ----
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+pipeline/keyword_corpus/
+publish/
+dashboard/
+
+# ---- pipeline state: never public ----
+queue/
+scores/
+tailored/
+applications/
+decisions/
+
+# ---- the profile: personal data, except the board list ----
+profile/*
+!profile/targets.yaml
+
+# ---- agent scratch files ----
+.claude/settings.local.json
+.claude/routines/*.notes.md
+.claude/routines/*.live.txt
+
+# ---- working docs that track a live search ----
+docs/history/
+
+# ---- python ----
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# ---- rendered documents ----
+*.pdf
+*.docx
+~$*
+
+# ---- os / editor ----
+.DS_Store
+Thumbs.db
+*.stackdump
+.idea/
+.vscode/

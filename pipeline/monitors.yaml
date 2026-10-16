@@ -1,0 +1,56 @@
+# STATUS: ALL FIVE MONITORS ARE PAUSED as of 2026-08-30. Nothing in the pipeline
+# ever read them: they only sent email, which is a notification channel this
+# system does not act on, so they cost 1200 credits/month and changed no
+# decision. Paused rather than deleted, because the URLs are still the right
+# ones if a future stage ever consumes them. Mastercard is additionally
+# redundant: it moved to `board: workday` in targets.yaml on 2026-08-23 and Layer 1
+# polls it directly now.
+#
+# To resume one:  firecrawl monitor update <id> --state active
+# To list ids:    firecrawl monitor list
+# Re-running setup_monitors.py will NOT resurrect them - it skips by name, and the
+# paused monitors still match their names, so it would create nothing.
+
+# Firecrawl career-page monitors — coverage for the `custom` boards in targets.yaml.
+#
+# Why this file exists: Intuit, Meta, Google, Microsoft, and Mastercard run their own
+# career portals (or Workday), so they cannot be polled like Greenhouse/Lever/Ashby.
+# JobSpy reaches them only incidentally. Firecrawl's monitor watches each search page
+# and notifies on real content changes; its AI judge filters out timestamp, formatting,
+# and tracking-param noise, so a notification means a posting actually changed.
+#
+# All 5 URLs verified HTTP 200 on 2026-08-11.
+#
+# SETUP (one time, requires the Firecrawl API key):
+#   firecrawl config                      # or: export FIRECRAWL_API_KEY=fc-...
+#   python pipeline/setup_monitors.py     # creates one monitor per entry below
+#
+# These monitors NOTIFY only. They do not write to queue/ — a notification is a
+# prompt for Layer 2 to go look, which keeps Layer 1's dedupe the single gate.
+
+notify_email: you@example.com
+
+# Passed as --goal. Scopes what counts as a real change so routine page churn
+# does not generate email. Note: the `judgeEnabled` flag stays false on
+# scrape-mode monitors (it appears to apply to search-mode ones); the goal is
+# still stored, so watch the first few notifications and tighten if noisy.
+goal: >-
+  Alert only when a NEW product manager, associate product manager, technical
+  program manager, or program manager job posting appears, or an existing one is
+  removed. Ignore formatting, timestamps, tracking parameters, cookie banners,
+  result-count changes, and job reordering.
+# Natural-language schedule string, passed to the CLI's --schedule flag.
+# Matches the Layer 1 cron cadence.
+interval: every 3 hours
+
+monitors:
+  - company: Intuit
+    url: "https://jobs.intuit.com/search-jobs/product%20manager"
+  - company: Meta
+    url: "https://www.metacareers.com/jobs?q=product%20manager"
+  - company: Google
+    url: "https://www.google.com/about/careers/applications/jobs/results/?q=product%20manager"
+  - company: Microsoft
+    url: "https://jobs.careers.microsoft.com/global/en/search?q=product%20manager"
+  - company: Mastercard
+    url: "https://careers.mastercard.com/us/en/search-results?keywords=product%20manager"

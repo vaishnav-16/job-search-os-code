@@ -1,0 +1,102 @@
+/* Page shell, heading, theme control, and the health strip. Colour literals
+   are not allowed in this file -- everything comes from tokens.css.
+   (The status-chip strip that used to live here was retired 2026-08-23; the
+   attestations panel moved to board.css, beside the archive it now sits in.) */
+* { box-sizing: border-box; }
+body { font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+       margin: 0; padding: 18px 22px 64px; color: var(--ink); background: var(--paper);
+       font-variant-numeric: tabular-nums; }
+/* 14px body and 19px h1 sit OUTSIDE the --text-sm/md/lg utility scale on
+   purpose: that scale is for the dense secondary type the board phase will
+   inherit, not for the base and display sizes. */
+h1 { font-size: 19px; letter-spacing: -.01em; margin: 0 0 2px; }
+/* Never wrap markup INSIDE the title text: vercel_guard greps the served bytes
+   for PUBLIC_SENTINEL contiguously, and a <b> in the middle of it would leave
+   the leak check passing on every page forever. Style a sibling instead. */
+h1 .sub { color: var(--muted); font-weight: 400; }
+/* clear:both catches the floated theme control above. If the control is ever
+   taller than the h1, the meta line drops below it instead of wrapping into it. */
+.meta { color: var(--muted); font-size: var(--text-md); margin-bottom: var(--space-3);
+        clear: both; }
+a { color: var(--link); }
+
+/* --- theme control ------------------------------------------------------ */
+/* Emitted immediately BEFORE the <h1> and floated right, rather than wrapped
+   with the heading in a flex header: the h1 must keep its exact markup and
+   gain no parent, for the sentinel reason above. Three states, because "auto"
+   (follow the OS) is a real choice and not the absence of one -- the pressed
+   button reflects the STORED preference, so under a dark OS with no override
+   it is "auto" that reads pressed, never "dark". */
+.themebar { float: right; display: flex; margin: 1px 0 0 var(--space-3);
+            border: 1px solid var(--rule-strong); border-radius: var(--radius-2);
+            overflow: hidden; background: var(--card); }
+.themebar button { font: inherit; font-size: var(--text-sm); letter-spacing: .07em;
+            text-transform: uppercase; padding: 3px 10px; cursor: pointer;
+            color: var(--muted); background: transparent; border: 0; }
+.themebar button + button { border-left: 1px solid var(--rule-strong); }
+.themebar button:hover { background: var(--hover); color: var(--ink); }
+.themebar button[aria-pressed="true"] { background: var(--board); color: var(--board-ink); }
+.themebar button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* --- the health strip --------------------------------------------------- */
+/* Two clocks, one row, one scale. Four full-width banners stood here -- Layer 1,
+   Layer 2, the sync state, the attestations panel -- each filled edge to edge in
+   its own state colour, so the page shouted four things at equal volume before
+   showing any work. State is a dot now and the story is one click away:
+   green/green reads in half a second and is never thought about again.
+   A healthy clock is deliberately NOT tinted green. A green fill spends
+   attention on "nothing happened" and leaves the tint meaning nothing when it
+   finally appears. */
+.health { display: flex; flex-wrap: wrap; gap: var(--space-2);
+          margin: var(--space-3) 0 0; }
+.hc { flex: 1 1 320px; min-width: 0; background: var(--card);
+      border: 1px solid var(--rule); border-radius: var(--radius-1); }
+.hc.warn { background: var(--warn-bg); border-color: var(--warn); }
+.hc.bad { background: var(--fail-bg); border-color: var(--fail); }
+/* The whole line is the summary, so a clock is exactly ONE tab stop and the
+   disclosure is the browser's, not ours. The native marker is dropped because
+   it would sit outside the state dot and read as a second, competing bullet. */
+.hd > summary { display: flex; align-items: center; gap: var(--space-2);
+                padding: 7px 11px; cursor: pointer; list-style: none;
+                font-size: var(--text-lg); }
+.hd > summary::-webkit-details-marker { display: none; }
+.hd > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px;
+                border-radius: var(--radius-1); }
+.hdot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--go); }
+.hc.warn .hdot { background: var(--warn); }
+.hc.bad .hdot { background: var(--fail); }
+.hlayer { flex: none; font-size: var(--text-sm); letter-spacing: .07em;
+          text-transform: uppercase; color: var(--muted); }
+.hsep { color: var(--muted); }
+.hage { flex: none; font-size: var(--text-md); color: var(--muted);
+        font-variant-numeric: tabular-nums; }
+/* The colour is never the whole signal. This phrase says in words what the dot
+   says in hue, so the strip still works for a reader who cannot tell amber from
+   green -- and it is a one-line summary of the <details>, never a substitute. */
+.hnote { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+         font-size: var(--text-md); font-weight: 600; color: var(--muted); }
+.hc.warn .hnote { color: var(--warn); }
+.hc.bad .hnote { color: var(--fail); }
+.hmore { margin-left: auto; flex: none; font-size: var(--text-sm); letter-spacing: .07em;
+         text-transform: uppercase; color: var(--muted); }
+.hmore::after { content: " \25BE"; }
+.hd[open] .hmore::after { content: " \25B4"; }
+/* Everything the old banners printed, verbatim: the run summary, the errors=
+   reading, the commits-behind note, the deferred/failed sync state with its
+   paths. Demoted, not deleted -- one click, never a lost sentence. */
+.hbody { padding: var(--space-2) 11px 10px; margin: 0; font-size: var(--text-md);
+         color: var(--muted); border-top: 1px solid var(--rule); }
+.hbody b { color: var(--ink); }
+.hbody code { font-size: var(--text-sm); overflow-wrap: anywhere; }
+.hstate { margin: var(--space-2) 0 0; padding: 6px 9px; border-radius: 4px;
+          border: 1px solid var(--warn); background: var(--warn-bg); color: var(--warn); }
+.hstate.stale { border-color: var(--fail); background: var(--fail-bg); color: var(--fail); }
+.hstate b, .hstate.stale b { color: inherit; }
+/* On a phone the note is the first thing the ellipsis eats, and "checkout…" is
+   the one word in the line that carries no information at all. Give it its own
+   row instead: the whole point of the phrase is that it survives where colour
+   does not. */
+@media (max-width: 640px) {
+  .hd > summary { flex-wrap: wrap; }
+  .hnote { flex-basis: 100%; white-space: normal; overflow: visible; }
+}

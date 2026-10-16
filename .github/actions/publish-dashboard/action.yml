@@ -1,0 +1,99 @@
+# Build the dashboard from the checked-out tree and publish it to Vercel.
+#
+# A step, not a workflow (2026-10-08): detect.yml and fold.yml run it at the
+# end of their own job, after they push. It used to be dashboard.yml fired by
+# workflow_run after every detect and fold, a separately billed job (~22 a day,
+# ~32 billed minutes) that also rebuilt after every 40-min-gated detect skip,
+# when nothing had changed. Actions minutes were pacing at the Pro plan's
+# 3,000 a month. dashboard.yml still uses this for code pushes and by hand.
+# Since W7 (2026-10-13) the deploy is a REST call (pipeline/vercel_deploy.py),
+# not `npm i -g vercel`.
+#
+# The caller sets VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID and PROD_ALIAS
+# in its job env (a composite action cannot read secrets). With no token it
+# builds, checks and uploads the artifact, and skips the deploy.
+#
+# What is uploaded to Vercel: exactly one file, the dashboard HTML. Access
+# control is Vercel Authentication in front of the page. Resume files are never
+# uploaded; their links point at private github.com blob URLs. The guard step
+# is a backstop against the worst leaks (master doc, private profile, phone
+# number), not an exhaustive filter.
+
+name: publish-dashboard
+description: Build pipeline/dashboard.py into one HTML file and deploy it to the gated Vercel alias
+
+runs:
+  using: composite
+  steps:
+    # Sidecars the routine published that the fold has not taken yet (normally
+    # minutes). applications/ too, so a new resume renders with its links.
+    # Safe because the guard below still ships exactly one file.
+    - name: Overlay cloud sidecars
+      shell: bash
+      run: |
+        branches=$(git ls-remote --heads origin 'claude/judge*' | awk '{print $2}' | sed 's#refs/heads/##')
+        [ -n "$branches" ] || echo "no claude/judge* branch yet"
+        for branch in $branches; do
+          git fetch --depth=1 origin "$branch" 2>/dev/null || continue
+          echo "$(git log -1 --format=%ct "origin/$branch") $branch"
+        done | sort -n | while read -r _ branch; do
+          git checkout "origin/$branch" -- scores/ tailored/ applications/ 2>/dev/null || true
+          echo "overlaid $branch"
+        done
+
+    - name: Build dashboard
+      shell: bash
+      run: |
+        python pipeline/dashboard.py --links github --out publish/index.html
+        test -s publish/index.html
+
+    # The deploy directory must contain exactly one file. If a future edit ever
+    # writes a resume here, fail rather than publish it.
+    - name: Refuse to publish anything but the dashboard
+      shell: bash
+      run: |
+        found=$(find publish -type f | sort)
+        echo "$found"
+        if [ "$found" != "publish/index.html" ]; then
+          echo "::error::publish/ must contain only index.html"
+          exit 1
+        fi
+        if grep -rqiE 'master-doc|PRIVATE_PROFILE|profile/knowledge|profile/archive|\+1[0-9-]{9}' publish/index.html; then
+          echo "::error::dashboard appears to embed private profile content"
+          exit 1
+        fi
+
+    # Before the upload, while the data is still on the runner. Vercel
+    # Authentication does not cover a project's short *.vercel.app alias on the
+    # Hobby plan (proven with a canary page, 2026-08-18); this asserts the
+    # project still has zero project domains. See pipeline/vercel_guard.py.
+    - name: Refuse to publish to a public URL
+      if: env.VERCEL_TOKEN != ''
+      shell: bash
+      run: python pipeline/vercel_guard.py --preflight
+
+    # Through the REST API since W7 (2026-10-13), not the npm CLI: the install
+    # was 25s of every detect and fold, and a failed CLI deploy left no error
+    # text. pipeline/vercel_deploy.py prints Vercel's own status and error body.
+    # No git metadata is sent, so the TEAM_ACCESS_REQUIRED block (2026-08-18:
+    # the CLI attached the commit author inside the work tree) cannot recur.
+    - name: Deploy to Vercel
+      id: deploy
+      if: env.VERCEL_TOKEN != ''
+      shell: bash
+      run: python pipeline/vercel_deploy.py publish/index.html
+
+    # A config that reads correct and a URL that is actually gated are two
+    # different claims: fetch every production URL with no credentials.
+    - name: Prove the published page is not anonymously readable
+      if: env.VERCEL_TOKEN != ''
+      shell: bash
+      run: python pipeline/vercel_guard.py --postflight
+
+    - name: Upload dashboard artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: dashboard
+        path: publish/index.html
+        retention-days: 14
+        overwrite: true

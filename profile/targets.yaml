@@ -1,0 +1,408 @@
+# Layer 1 ATS polling targets — companies whose boards get checked hourly.
+# board: greenhouse | lever | ashby | workday | custom
+# slug: the company's board identifier in the ATS URL (verify each — visit the
+#   company's careers page, view a job posting, and the ATS + slug are in the URL).
+# For `custom` (own career portals like Meta/Google/Microsoft), Layer 1 falls
+#   back to JobSpy discovery — they can't be polled directly.
+# title_filter: regex applied to job titles from this company (keeps queue clean).
+
+defaults:
+  # 2026-10-08: product owner / analyst / operations and the adjacent families
+  # (FDE, developer relations) were dropped here before insert while JobSpy's
+  # JOBSPY_RELEVANT already admitted them. APM and TPM are word-bounded now.
+  # Single-quoted so YAML passes the backslashes through untouched.
+  title_filter: '(?i)(product\s+(manager|owner|analyst|operations)|program\s+manager|\bAPM\b|\bTPM\b|forward[\s-]+deployed|developer\s+(relations|advocate))'
+  # Keep-filter: US signals only. State codes word-bounded (bare "US"/"CA" used to
+  # match "Australia"/"Canada"); major cities listed because some boards (e.g.
+  # Ashby/Plaid) return bare city names with no state. Fixed 2026-08-11.
+  location_filter: "(?i)(united states|\\bUSA?\\b|remote|\\b(NH|NY|CA|WA|TX|MA|IL|CO|GA|FL|PA|NC|VA|UT|OR|AZ|TN|DC|NJ|CT|MN|MI|OH|MO|WI)\\b|new york|san francisco|seattle|austin|boston|chicago|denver|atlanta|los angeles|salt lake|portland|miami|dallas|phoenix|raleigh|nashville|columbus|charlotte)"
+
+# Sources already known to be dead, with the date and the reason. They still show
+# in the run table and in the run summary as `known_degraded=`, but they do NOT
+# colour the dashboard clock and do NOT raise a per-run warning annotation.
+#
+# Why this list has to exist: an alarm that is on permanently is exactly as
+# informative as one that is never on, and it trains the reader to skip the whole
+# area — including the states that still work. Same reasoning as the attestation
+# queue's `closed-unavailable` outcome and the standing dispositions file: a known
+# condition must be recorded once and then stop costing attention. Remove an entry
+# to make that source loud again.
+acknowledged_degraded:
+  - source: "jobspy[google]"
+    since: "2026-08-11"
+    why: >-
+      JobSpy's Google Jobs scraper returns 0 rows for every search term. Upstream
+      breakage in python-jobspy, not a config error here and not fixable from this
+      repo. Indeed still carries the breadth layer.
+      Re-tested 2026-08-23 with the documented natural-language google_search_term
+      ("<term> jobs in United States since yesterday") in place of the known-broken
+      "<term> jobs USA": still 0 rows, for both "product manager" and "technical
+      program manager". The scraper logs "initial cursor not found", i.e. it can no
+      longer locate the pagination cursor in Google's response at all — a query
+      shape cannot fix that. scrape.py now sends the correct syntax anyway, so if
+      upstream repairs the parser this source recovers without a code change; drop
+      this entry when it does.
+
+  - source: "jobright:h1b"
+    since: "2026-08-23"
+    why: >-
+      Upstream stopped rebuilding jobright-ai/Daily-H1B-Jobs-In-Tech on
+      2026-05-06 — last commit that day, and the newest row in the file is dated
+      2026-05-06 too. Every row is therefore months past the 72h ingest window,
+      so this feed contributes 0 rows on every run and will keep doing so until
+      the repo revives. Nothing here is broken: the poller fetches and parses all
+      1,424 rows cleanly.
+      Acknowledging it silences the one error this source can raise — "no job
+      rows parsed", which fires when the table layout or filename moves — so a
+      real upstream reshuffle would go unannounced. That is the accepted cost: a
+      feed contributing nothing cannot be made worse by a parse break, and the
+      run table still names the newest row in the file every hour, which is the
+      readout that will show the repo coming back to life.
+      The live replacement for Vaish's lane is "jobright:pm-newgrad"
+      (jobright-ai/2026-Product-Management-New-Grad), added the same day and
+      deliberately NOT acknowledged: it is current and must stay loud. Drop this
+      entry if the H1B repo starts updating again — its sponsorship flag is a
+      signal no other source here carries.
+
+targets:
+  # --- Verified priorities (fill slugs by checking a live posting URL) ---
+  - company: Intuit
+    board: intuit          # W3c 2026-10-10: Radancy category pages + each job's JSON-LD
+                           # (its /search-jobs/ JSON path is robots-disallowed; not on
+                           # public Workday either: 401/422, probed 2026-08-23).
+  - company: Relay
+    board: greenhouse      # slug verified 2026-08-11 (API returns 200)
+    slug: relaypro
+  - company: Mastercard
+    board: workday         # verified 2026-08-23 (was `custom`; Workday has a public JSON API)
+    slug: mastercard/wd1/CorporateCareers
+  - company: Meta
+    board: custom          # metacareers.com robots.txt prohibits automated collection; JobSpy only
+  # W3c 2026-10-10: big-tech career sites, pipeline/bigtech.py (searches, not whole boards)
+  - company: Google
+    board: google
+  - company: Microsoft
+    board: microsoft
+  - company: Amazon
+    board: amazon
+  - company: Apple
+    board: apple
+  - company: Netflix
+    board: netflix
+  # Uber: no public endpoint (JS shell, robots.txt disallows */api/), JobSpy only
+
+  # --- Fintech / payments (all slugs below verified live 2026-08-11) ---
+  - company: Stripe
+    board: greenhouse
+    slug: stripe
+  - company: Plaid
+    board: ashby           # moved off Lever (lever API returns [] as of 2026-08-11)
+    slug: plaid
+  - company: Ramp
+    board: ashby
+    slug: ramp
+  - company: Brex
+    board: greenhouse
+    slug: brex
+  - company: Affirm
+    board: greenhouse
+    slug: affirm
+  - company: Chime
+    board: greenhouse
+    slug: chime
+
+  # --- Platform / API / devtools ---
+  - company: Twilio
+    board: greenhouse
+    slug: twilio
+  - company: Datadog
+    board: greenhouse
+    slug: datadog
+  # Postman removed 2026-10-08: its greenhouse board 404s on every run, and no
+  # greenhouse, lever, ashby, smartrecruiters or workable board answers for it
+  # (probed that day). JobSpy still finds its postings.
+
+  # --- Workday (slug = tenant/wd-host/site, copy-pasteable out of the careers
+  #     URL; see the WORKDAY_SLUG_PARTS comment in scrape.py. The wd-host number
+  #     is per-tenant and not guessable — `curl https://{tenant}.{host}
+  #     .myworkdayjobs.com/robots.txt` lists a tenant's real site names.)
+  #     All seven probed live 2026-08-23. These are the big fintech/enterprise
+  #     boards that were invisible to Layer 1 before: they had no poller, so a
+  #     Mastercard or Capital One PM role only ever arrived if Indeed caught it.
+  #
+  #     ADDING A TENANT: confirm it with a NON-ZERO result count, never with
+  #     HTTP 200. A renamed tenant or a moved site answers 200 with an empty
+  #     jobPostings list, which is indistinguishable from a quiet board from the
+  #     outside — and fetch_workday RAISES when a board yields zero postings
+  #     across BOTH search terms, precisely so that failure is loud. That guard
+  #     is right for a moved tenant and wrong for a legitimately tiny one, which
+  #     would then error every hour: if a tenant genuinely has no PM/TPM-ish
+  #     postings at all, it does not belong on this list yet. Post the same
+  #     query the poller does (limit 20, offset 0, searchText "product manager"
+  #     then "technical program manager") and require rows back from at least
+  #     one of them before committing the slug.
+  - company: Capital One
+    board: workday
+    slug: capitalone/wd12/Capital_One
+  - company: PayPal
+    board: workday
+    slug: paypal/wd1/jobs
+  - company: Visa
+    board: workday
+    slug: visa/wd5/Visa
+  - company: Adobe
+    board: workday
+    slug: adobe/wd5/external_experienced
+  - company: Salesforce
+    board: workday
+    slug: salesforce/wd12/External_Career_Site
+  - company: NVIDIA
+    board: workday
+    slug: nvidia/wd5/NVIDIAExternalCareerSite
+
+  # ==========================================================================
+  # Boards added 2026-08-23. Every slug below was probed live that day and
+  # returned HTTP 200 with a non-empty job list; the inline counts are what the
+  # board held at probe time (standing inventory, not inflow). Candidates came
+  # from santifer/career-ops' portals catalogue (MIT) plus hand-picked targets,
+  # and 7 of 59 were rejected outright rather than guessed at — the rejects and
+  # the full probe table live in the commit message for this change.
+  #
+  # Why this many: measured the same day, all 52 together produce ~11 PM/TPM-
+  # titled US roles per 72h (~4-6 on a weekday) against JobSpy/Indeed's ~750
+  # rows/day. The point is not volume, it is PRECISION — Greenhouse's
+  # first_published and Ashby's publishedAt are real timestamps, while 201 of
+  # 201 live rows at the time carried day-only precision, which is why exactly
+  # ONE of them could be proven under 24h. An ATS row is the only kind Vaish's
+  # 24h apply rule can actually be enforced against.
+  # ==========================================================================
+
+  # --- AI / ML ---
+  - company: Anthropic
+    board: greenhouse
+    slug: anthropic       # verified 2026-08-23 (518 jobs, 41 PM-titled)
+  - company: OpenAI
+    board: ashby
+    slug: openai           # verified 2026-08-23 (750 jobs, 48 PM-titled)
+  - company: Databricks
+    board: greenhouse
+    slug: databricks       # verified 2026-08-23 (820 jobs, 40 PM-titled)
+  - company: Scale AI
+    board: greenhouse
+    slug: scaleai           # verified 2026-08-23 (208 jobs, 24 PM-titled) — "scale-ai"/"scale" both 404
+  - company: Cohere
+    board: ashby
+    slug: cohere            # verified 2026-08-23 (150 jobs, 10 PM-titled)
+  - company: Perplexity
+    board: ashby
+    slug: perplexity        # verified 2026-08-23 (100 jobs, 2 PM-titled)
+  - company: LangChain
+    board: ashby
+    slug: langchain         # verified 2026-08-23 (105 jobs, 1 PM-titled)
+  - company: Pinecone
+    board: ashby
+    slug: pinecone          # verified 2026-08-23 (7 jobs, 0 PM-titled)
+  - company: Glean
+    board: greenhouse
+    slug: gleanwork         # verified 2026-08-23 (110 jobs, 14 PM-titled)
+  - company: Arize AI
+    board: greenhouse
+    slug: arizeai            # verified 2026-08-23 (27 jobs, 1 PM-titled)
+  - company: CoreWeave
+    board: greenhouse
+    slug: coreweave          # verified 2026-08-23 (276 jobs, 18 PM-titled) — also carries former Weights & Biases roles (acquired 2025)
+  - company: RunPod
+    board: ashby
+    slug: runpod             # verified 2026-08-23 (20 jobs, 1 PM-titled) — NOT greenhouse (404 there)
+  - company: Sierra
+    board: ashby
+    slug: sierra             # verified 2026-08-23 (193 jobs, 19 PM-titled)
+  - company: Decagon
+    board: ashby
+    slug: decagon            # verified 2026-08-23 (137 jobs, 10 PM-titled)
+
+  # --- Voice AI ---
+  - company: ElevenLabs
+    board: ashby
+    slug: elevenlabs         # verified 2026-08-23 (254 jobs, 0 PM-titled)
+  - company: Deepgram
+    board: ashby
+    slug: deepgram           # verified 2026-08-23 (88 jobs, 6 PM-titled)
+  - company: Vapi
+    board: ashby
+    slug: vapi                # verified 2026-08-23 (31 jobs, 1 PM-titled)
+  - company: Bland AI
+    board: ashby
+    slug: bland                # verified 2026-08-23 (17 jobs, 0 PM-titled)
+
+  # --- Platform / API / devtools ---
+  - company: Vercel
+    board: greenhouse
+    slug: vercel               # verified 2026-08-23 (83 jobs, 2 PM-titled)
+  - company: Cloudflare
+    board: greenhouse
+    slug: cloudflare           # verified 2026-08-23 (310 jobs, 7 PM-titled)
+  - company: MongoDB
+    board: greenhouse
+    slug: mongodb              # verified 2026-08-23 (404 jobs, 20 PM-titled)
+  # The ONLY Lever board on the list, and `lever` is in FULL_BOARD_FETCHERS, so
+  # the delisted sweep trusts one request to answer "is this posting still up?"
+  # for every Palantir row. Re-probed 2026-08-23 with fetch_lever's EXACT request
+  # shape (mode=json, no limit, no skip): 308 postings — not a round number, so
+  # not a cap. Cross-checked: `limit=1000` returns the same 308 and `skip=300`
+  # returns 8, i.e. the plain call already gets the whole board. If the v0
+  # endpoint ever starts paging, this fetcher must leave FULL_BOARD_FETCHERS the
+  # same day or the sweep becomes a mass-deleter of everything past page 1.
+  - company: Palantir
+    board: lever
+    slug: palantir             # verified 2026-08-23 (308 jobs, 13 PM-titled)
+  - company: Airtable
+    board: greenhouse
+    slug: airtable             # verified 2026-08-23 (16 jobs, 2 PM-titled)
+  - company: Notion
+    board: ashby
+    slug: notion                # verified 2026-08-23 (128 jobs, 3 PM-titled)
+  - company: Linear
+    board: ashby
+    slug: linear                 # verified 2026-08-23 (32 jobs, 2 PM-titled)
+  - company: WorkOS
+    board: ashby
+    slug: workos                 # verified 2026-08-23 (28 jobs, 2 PM-titled)
+  - company: Supabase
+    board: ashby
+    slug: supabase                # verified 2026-08-23 (58 jobs, 6 PM-titled)
+  - company: PlanetScale
+    board: greenhouse
+    slug: planetscale             # verified 2026-08-23 (10 jobs, 0 PM-titled)
+  - company: Resend
+    board: ashby
+    slug: resend                  # verified 2026-08-23 (11 jobs, 0 PM-titled) — small board, poll is cheap
+  - company: Inngest
+    board: ashby
+    slug: inngest                  # verified 2026-08-23 (1 job, 0 PM-titled) — very thin board; keep only if you'd want their offer anyway
+  - company: Samsara
+    board: greenhouse
+    slug: samsara                  # verified 2026-08-23 (266 jobs, 12 PM-titled)
+  - company: Checkr
+    board: greenhouse
+    slug: checkr                   # verified 2026-08-23 (45 jobs, 1 PM-titled)
+
+  # --- Enterprise SaaS ---
+  - company: Figma
+    board: greenhouse
+    slug: figma                    # verified 2026-08-23 (161 jobs, 9 PM-titled)
+  - company: Vanta
+    board: ashby
+    slug: vanta                     # verified 2026-08-23 (103 jobs, 6 PM-titled)
+  - company: Boomi
+    board: greenhouse
+    slug: boomilp                   # verified 2026-08-23 (63 jobs, 1 PM-titled)
+  - company: Hightouch
+    board: ashby
+    slug: hightouch                 # moved from greenhouse (404 since ~10-01); ashby verified 2026-10-08
+  - company: Attio
+    board: ashby
+    slug: attio                     # verified 2026-08-23 (44 jobs, 0 PM-titled)
+  - company: Attentive
+    board: greenhouse
+    slug: attentive                 # verified 2026-08-23 (39 jobs, 2 PM-titled) — NOT lever (404 there); greenhouse is correct
+  - company: Zapier
+    board: ashby
+    slug: zapier                     # verified 2026-08-23 (9 jobs, 0 PM-titled)
+  - company: Clay
+    board: ashby
+    slug: claylabs                    # verified 2026-08-23 (68 jobs, 0 PM-titled)
+  - company: Discord
+    board: greenhouse
+    slug: discord                     # verified 2026-08-23 (51 jobs, 2 PM-titled)
+
+  # --- Fintech / payments ---
+  - company: Coinbase
+    board: greenhouse
+    slug: coinbase                    # verified 2026-08-23 (173 jobs, 13 PM-titled)
+  - company: Robinhood
+    board: greenhouse
+    slug: robinhood                   # verified 2026-08-23 (130 jobs, 7 PM-titled)
+  - company: Gusto
+    board: greenhouse
+    slug: gusto                       # verified 2026-08-23 (91 jobs, 5 PM-titled)
+  - company: Adyen
+    board: greenhouse
+    slug: adyen                       # verified 2026-08-23 (216 jobs, 13 PM-titled) — Amsterdam HQ, real US postings present
+  - company: Wise
+    board: greenhouse
+    slug: wise                        # verified 2026-08-23 (19 jobs, 0 PM-titled) — UK/Estonia HQ, has a US (Austin) office
+  - company: Marqeta
+    board: ashby
+    slug: marqeta-inc                 # verified 2026-09-12 (42 jobs, 3 PM-titled; 42/42 JDs name Marqeta).
+                                      # Moved off Greenhouse: `greenhouse/marqeta` began 404ing 2026-09-01
+                                      # and failed 70 consecutive runs before anyone looked, because one
+                                      # dead source of 69 sits under DEGRADED_MIN_SOURCES=2 and never
+                                      # colours the dashboard clock. Ashby also carries real posting
+                                      # timestamps, so these rows get `exact` age precision where the old
+                                      # Greenhouse board gave day-only.
+
+  # --- Marketplaces ---
+  - company: DoorDash
+    board: greenhouse
+    slug: doordashusa                 # verified 2026-08-23 (463 jobs, 10 PM-titled) — NOT "doordash" (404); "doordashusa" is correct
+  - company: Instacart
+    board: greenhouse
+    slug: instacart                    # verified 2026-08-23 (118 jobs, 14 PM-titled)
+  - company: Flexport
+    board: greenhouse
+    slug: flexport                     # verified 2026-08-23 (165 jobs, 5 PM-titled)
+  - company: Pinterest
+    board: greenhouse
+    slug: pinterest                    # verified 2026-08-23 (224 jobs, 20 PM-titled)
+  - company: Reddit
+    board: greenhouse
+    slug: reddit                       # verified 2026-08-23 (151 jobs, 12 PM-titled)
+
+  # Added 2026-09-18 after probing live boards: established companies with 5+ open US
+  # PM/TPM postings and early-career PM hiring, to balance a list heavy on AI-infra startups.
+  - company: Fivetran
+    board: greenhouse
+    slug: fivetran
+  - company: Duolingo
+    board: greenhouse
+    slug: duolingo
+  - company: Airbnb
+    board: greenhouse
+    slug: airbnb
+  - company: GitLab
+    board: greenhouse
+    slug: gitlab
+  - company: Klaviyo
+    board: greenhouse
+    slug: klaviyo
+  - company: Okta
+    board: greenhouse
+    slug: okta
+  - company: Elastic
+    board: greenhouse
+    slug: elastic
+  - company: Lyft
+    board: greenhouse
+    slug: lyft
+  - company: Roblox
+    board: greenhouse
+    slug: roblox
+  - company: Braze
+    board: greenhouse
+    slug: braze
+  - company: Oscar Health
+    board: greenhouse
+    slug: oscar
+  - company: Mercury
+    board: greenhouse
+    slug: mercury
+  - company: Asana
+    board: greenhouse
+    slug: asana
+  - company: Faire
+    board: greenhouse
+    slug: faire
+  - company: Toast
+    board: greenhouse
+    slug: toast

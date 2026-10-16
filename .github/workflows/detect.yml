@@ -1,0 +1,297 @@
+# Layer 1 — detection. Polls ATS boards + JobSpy every 2h (external cron, below), dedupes against
+# the committed jobs.sqlite, commits net-new queue JSONs + the updated DB.
+# Costs zero Claude usage and never sleeps. Layer 2 (judgment) is the score-queue and tailor-queue routines;
+# fold.yml folds its output into the DB.
+#
+# Cadence (2026-08-15): 3h -> 1h. Vaish applies inside 24h of posting, so
+# detection latency is spent directly out of that budget.
+#
+# THE ~35s IN THIS COMMENT WAS TRUE AT 10 BOARDS AND IS NOT NOW (corrected
+# 2026-09-12). Measured on run 34712369856: 149s total -- checkout 4s,
+# setup-python 2s, pip install 13s (caching is already on; it is not the
+# problem), detection 124s, commit 3s. The board count went 10 -> 69 and
+# nothing in the repo reported the cost, because scrape.py had no timing
+# instrumentation at all. It does now, and prints a phase breakdown.
+#
+# EXTERNAL CRON (2026-09-28). GitHub's scheduler delivered about 6 of 48
+# fires a day for 30 days straight (12%), with gaps up to 6.5h, whatever we
+# asked for: one entry (09-09..11) and two entries (:17 and :47, from 09-12)
+# delivered the same ~0.23-0.33 fires an hour, and GitHub absorbed the extra
+# asks rather than dropping them independently. Median age at detection was
+# 23h against a 48h apply window. The cause is GitHub-side and not observable
+# from here, so the primary trigger is now cron-job.org calling the
+# workflow_dispatch API every 2h at :17 past odd UTC hours (12 runs a day,
+# 15-75 min before each tailor-queue fire at 08:30 / 14:30 / 21:30 UTC) with
+# respect_gate=true. Setup lives in docs/schedule.md.
+#
+# The `schedule:` below is a sparse BACKUP only, so detection limps on if the
+# external caller dies. Do not add entries back: more asks never bought more
+# delivery (measured above), and each delivered fire drags a dashboard rebuild
+# behind it (dashboard.yml runs on every detect completion). Budget: ~3.5 min
+# a run, ~12-18 runs a day, about 2,200 of Pro's 3,000 minutes a month.
+#
+# Layer 1 stays here, not in a Routine: a Routine is always an LLM session and
+# would start charging tokens for this.
+#
+# Expectations on this runner (LEARNINGS 2026-08-14):
+# - ATS APIs (Greenhouse/Lever/Ashby) are the backbone and work from anywhere.
+# - JobSpy (Indeed/Google) degrades on datacenter IPs — those sources may show
+#   ERROR lines in the summary. scrape.py contains failures per-source, so a
+#   blocked scraper never kills a run that still found something.
+# - The exception, added 2026-08-18: if EVERY live source errors and nothing is
+#   found, the run fails on purpose. Measured that day, 962 of 963 recent rows
+#   came from Indeed alone, so "the breadth layer quietly became one source"
+#   is a real failure mode and it used to render as a green check.
+
+name: detect
+
+on:
+  schedule:
+    # Backup only; the external cron is the primary trigger (header). Even
+    # hours at :17, exactly 60 min from each external odd-hour call, so a
+    # delivered backup never gates an external run (the gate is 40 min).
+    - cron: "17 */4 * * *"
+  workflow_dispatch:
+    inputs:
+      respect_gate:
+        # The external cron sends "true" so its calls go through the 40-min
+        # gate like scheduled fires. A human dispatch leaves it false and
+        # always gets a run.
+        description: "Skip if detection ran in the last 40 min (external cron)"
+        type: boolean
+        default: false
+
+concurrency:
+  group: detect
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: write   # dispatch fold.yml when dashboard decisions are waiting (W7)
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # For the publish-dashboard step at the end (a composite action cannot read
+    # secrets, and a step's `if` cannot see its own env block).
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      PROD_ALIAS: your-dashboard.vercel.app
+      # The Jobright app-feed reader (scrape.poll_jobright_app) reads a logged-in
+      # session and is NOT wired up in this copy. Whether a site allows that is
+      # a decision the operator makes for themselves; to enable it, pass your own
+      # session as JOBRIGHT_COOKIE here. Unset, the reader is skipped.
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pipeline/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r pipeline/requirements.txt
+
+      # Two cron entries mean two fires an hour, and at GitHub's current ~23%
+      # delivery that is the point -- but if delivery ever recovers it would
+      # become 48 real runs a day, each dragging a dashboard rebuild behind
+      # it. This gate caps the real work at roughly one poll an hour whatever
+      # the scheduler does. It reads the committed DB's own runs table, which
+      # every detection run appends to, so it needs no extra state.
+      #
+      # Deliberately NOT `exit 1`: a skipped fire is a healthy outcome, and
+      # failing here would paint the dashboard's dead-cron alarm red for the
+      # one reason that is not an outage. It also runs AFTER checkout and pip
+      # so the skip is decided on real data; GitHub bills a started job for a
+      # minimum of one minute either way, so an earlier exit saves nothing.
+      - name: Skip if detection already ran recently
+        id: gate
+        # Scheduled fires and external-cron dispatches (respect_gate=true) only.
+        # A human who asks for a run gets one -- a manual dispatch is nearly
+        # always someone verifying a change, and silently skipping it would make
+        # the workflow look broken at the one moment somebody is watching it.
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ] && [ "${{ github.event.inputs.respect_gate }}" != "true" ]; then
+            echo "event is ${{ github.event_name }} without respect_gate: gate does not apply"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # `|| MINS=""` plus the digit guard below. A `run:` step with no `shell:`
+          # key runs under `/usr/bin/bash -e {0}` -- confirmed in run 34720669362's
+          # own log, and note it is NOT `-eo pipefail`, which you only get by
+          # writing `shell: bash` explicitly. The `-e` is the half that matters:
+          # a bare `MINS=$(python ...)` whose probe raised would ABORT THE STEP,
+          # and abort it UPSTREAM of "Fail if detection was blind", so the one
+          # check meant to judge a bad detection run never gets to speak. That
+          # turns a delivery improvement into a detection outage.
+          # A gate that cannot read the clock must fall through to polling, never
+          # block it: unknown age is treated as old.
+          MINS=$(python - <<'PY'
+          import sys, sqlite3, datetime as dt
+          sys.path.insert(0, 'pipeline')
+          import db
+          conn = db.connect_readonly()
+          row = conn.execute(
+              "SELECT ts FROM runs WHERE kind='layer1' ORDER BY ts DESC LIMIT 1"
+          ).fetchone()
+          if not row:
+              print(99999)
+          else:
+              then = dt.datetime.strptime(row[0], '%Y-%m-%dT%H:%M:%SZ').replace(
+                  tzinfo=dt.timezone.utc)
+              print(int((dt.datetime.now(dt.timezone.utc) - then).total_seconds() // 60))
+          PY
+          ) || MINS=""
+          case "$MINS" in
+            ''|*[!0-9]*)
+              echo "::notice title=Layer 1 gate::could not read the runs table; polling anyway"
+              MINS=99999 ;;
+          esac
+          echo "last detection run was ${MINS} min ago"
+          if [ "$MINS" -lt 40 ]; then
+            echo "::notice title=Layer 1 skipped::detection ran ${MINS} min ago (<40); skipping this fire"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # rc is captured rather than allowed to fail the step: a run where some
+      # sources died still found real jobs, and those must reach the commit
+      # below before anything is allowed to go red. The verdict is applied at
+      # the end, after the push.
+      - name: Run Layer 1 detection
+        id: detect
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          set +e
+          # JobSpy's LinkedIn source is available behind --linkedin but is NOT
+          # enabled here. Automated collection from LinkedIn is against their
+          # terms of service; the ATS APIs below are the supported path and are
+          # the backbone of this run anyway. Enable it only if you have your own
+          # basis for doing so.
+          python pipeline/scrape.py
+          echo "rc=$?" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      # Pruning belongs to whoever owns the DB, and hourly this is that writer.
+      # It used to run only in the twice-daily local sync, so queue/ grew all day
+      # and the cloud scorer re-read every stale posting on each of its three
+      # runs — it drops provably-stale jobs without writing a sidecar, so they
+      # re-entered its work list until the laptop swept them.
+      - name: Prune provably-stale queue entries
+        if: steps.gate.outputs.skip != 'true'
+        run: python pipeline/freshness.py --apply
+
+      - name: Commit cron state (queue + sidecars + dedupe DB)
+        if: steps.gate.outputs.skip != 'true'
+        run: |
+          git config user.name "layer1-cron"
+          git config user.email "actions@users.noreply.github.com"
+          # -A so the sweep's DELETIONS are staged, not just new files. scores/
+          # is included because a queue file and its sidecar die together: a
+          # sidecar left behind tells the cloud this job is already scored,
+          # forever.
+          git add -A queue/ scores/ pipeline/jobs.sqlite
+          if git diff --cached --quiet; then
+            echo "no changes to commit"
+            exit 0
+          fi
+          NEW=$(git diff --cached --name-only -- queue/ | grep -c '\.json$' || true)
+          git commit -m "layer1: ${NEW} new @ $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          # A local sync push may have landed since checkout. `git pull --rebase`
+          # CANNOT recover from that: both sides write pipeline/jobs.sqlite, which
+          # is a binary, so the rebase always conflicts and the old loop died on it
+          # (observed 2026-08-17, run 32065471397, losing that run's 16 finds until
+          # the next fire re-detected them).
+          #
+          # Recovery is reset-and-re-detect, not merge. Taking the remote DB is
+          # mandatory, not merely convenient: it may carry status changes from the
+          # local session that this runner must never clobber. Re-running scrape is
+          # safe because dedupe is a content hash, so it re-finds exactly the jobs
+          # that are still genuinely new against the newer DB.
+          #
+          # FAST PATH (2026-10-08). Since the laptop publishes text records straight
+          # to main, most rejections are a laptop push that never touched the DB
+          # (run 37845696361 lost attempts 1 and 3 that way, each followed by a
+          # ~4 min re-scrape that the next laptop push beat again). When the
+          # remote's jobs.sqlite still equals our base, only our side changed the
+          # binary, so replaying our one commit onto the new tip cannot conflict on
+          # it or clobber anything: rebase, push again in seconds. Anything else (a
+          # DB move from fold or another detect, or a rebase that fails on queue/ or
+          # scores/) falls through to reset-and-re-detect. HEAD~1 is our base because
+          # every iteration leaves exactly one commit on top of the remote tip.
+          #
+          # Recovery runs only when another push follows it; the old loop re-detected
+          # after its last rejection and then exited without pushing that work.
+          TRIES=6
+          for i in $(seq 1 $TRIES); do
+            if git push; then exit 0; fi
+            [ "$i" -eq "$TRIES" ] && break
+            git rebase --abort 2>/dev/null || true
+            git fetch origin main
+            if git diff --quiet HEAD~1 origin/main -- pipeline/jobs.sqlite; then
+              if git rebase origin/main; then
+                echo "push rejected (attempt $i): remote moved without touching the DB; replayed onto it"
+                continue
+              fi
+              git rebase --abort 2>/dev/null || true
+            fi
+            echo "push rejected (attempt $i): remote DB moved; re-detecting against remote"
+            git reset --hard origin/main
+            # --no-heartbeat: this is the SAME logical run, and stamping the runs
+            # table once per retry made the Layer 1 clock report activity that
+            # never independently happened.
+            python pipeline/scrape.py --no-heartbeat
+            python pipeline/freshness.py --apply
+            git add -A queue/ scores/ pipeline/jobs.sqlite
+            if git diff --cached --quiet; then
+              echo "nothing new against the updated remote; done"
+              exit 0
+            fi
+            NEW=$(git diff --cached --name-only -- queue/ | grep -c '\.json$' || true)
+            git commit -m "layer1: ${NEW} new @ $(date -u +%Y-%m-%dT%H:%M:%SZ) (re-detect after push conflict)"
+          done
+          echo "::error::lost the push race ${TRIES} times; the next fire will re-detect"
+          exit 1
+
+      # Publish the page in this job (2026-10-08), not in a separate
+      # workflow_run job: that cost a billed job per detect, gated skips
+      # included. Not on a gated skip (nothing changed). Yes on a failed or
+      # blind run, which is exactly when the page's Layer 1 clock must redraw.
+      # A publish failure never fails detection.
+      - name: Publish dashboard
+        if: ${{ !cancelled() && steps.gate.outputs.skip != 'true' }}
+        continue-on-error: true
+        uses: ./.github/actions/publish-dashboard
+
+      # W7 (2026-10-13): a dashboard click or /mark no longer starts fold.yml
+      # (81 click pushes on 10-12 cost ~190 billed minutes). Each detect run asks
+      # whether a fold would apply or drop a pending decision and dispatches one
+      # only then, so a click lands within about 2h and an entry that can only
+      # wait (row not scored yet) never loops a fold. A GITHUB_TOKEN dispatch is
+      # the one event that token may start. Never fails detection.
+      - name: Fold waiting dashboard decisions
+        if: ${{ !cancelled() && steps.gate.outputs.skip != 'true' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if python pipeline/decisions.py --foldable; then
+            gh workflow run fold.yml --ref main
+            echo "dispatched fold.yml"
+          fi
+
+      # Last, so a blind run is loud without ever costing the jobs a partial run
+      # did find. rc=3 means every live source failed AND nothing was detected;
+      # without this the Actions UI shows the same green check for that as for a
+      # genuinely quiet hour.
+      - name: Fail if detection was blind
+        if: steps.detect.outputs.rc == '3'
+        run: |
+          echo "::error::Layer 1 found nothing and every source errored - detection is down, not the market"
+          exit 1

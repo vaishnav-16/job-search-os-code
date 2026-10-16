@@ -1,0 +1,7 @@
+company,title,location,date_applied,status,notes
+# EXAMPLE FIXTURE. The real file lives at profile/seed_applied.csv and is not
+# published. One row per application submitted before the pipeline existed;
+# Layer 1 imports it once and the dedupe key (company+title+location) keeps
+# these out of the queue forever.
+Acme Corp,Product Manager,"New York, NY",2026-01-15,applied,applied through the careers page
+Northwind Labs,Associate Product Manager,"Remote, US",2026-02-03,rejected,rejected at screen

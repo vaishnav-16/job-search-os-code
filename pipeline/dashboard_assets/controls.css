@@ -1,0 +1,214 @@
+/* Search, filters, the decision buttons and their token panel, and the one
+   responsive breakpoint. Colour literals are not allowed in this file;
+   everything comes from tokens.css.
+
+   Every INTERACTIVE control is outlined in --rule-strong rather than the soft
+   --rule the panels use: WCAG 1.4.11 wants a control's boundary at 3:1 against
+   both the surface behind it and its own fill, and --rule is a divider, not an
+   affordance. A container is read from its fill; a control from its outline. */
+
+/* --- controls ----------------------------------------------------------- */
+/* A panel in its own right now that the rail above it is gone: it governs the
+   whole board below rather than one table's header. */
+.controls { background: var(--card); border: 1px solid var(--rule);
+            border-radius: var(--radius-1); padding: 10px var(--space-3);
+            margin: var(--space-4) 0 var(--space-3); }
+.searchrow { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
+#q { flex: 1 1 260px; min-width: 200px; font: inherit; padding: 6px 10px;
+     border: 1px solid var(--rule-strong); border-radius: 4px;
+     background: var(--sunk); color: var(--ink); }
+#q:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.slash { font-size: var(--text-sm); color: var(--muted); border: 1px solid var(--rule);
+         border-radius: 3px; padding: 0 5px; }
+select { font: inherit; padding: 5px var(--space-2); border: 1px solid var(--rule-strong);
+         border-radius: 4px; background: var(--sunk); color: var(--ink); }
+select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Two views of the same DOM, so it is a two-state segmented control and not a
+   button whose label has to guess which way it is pointing. Same shape as the
+   theme control above it, because it is the same kind of choice. */
+.viewbar { display: flex; border: 1px solid var(--rule-strong);
+           border-radius: var(--radius-2); overflow: hidden; background: var(--card); }
+.viewbar button { font: inherit; font-size: var(--text-sm); letter-spacing: .07em;
+           text-transform: uppercase; padding: 4px 11px; cursor: pointer;
+           color: var(--muted); background: transparent; border: 0; }
+.viewbar button + button { border-left: 1px solid var(--rule-strong); }
+.viewbar button:hover { background: var(--hover); color: var(--ink); }
+.viewbar button[aria-pressed="true"] { background: var(--board); color: var(--board-ink); }
+.viewbar button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.fgroup { margin-top: var(--space-2); display: flex; gap: 6px; align-items: baseline;
+          flex-wrap: wrap; }
+.fgroup .lbl { font-size: var(--text-sm); letter-spacing: .08em; text-transform: uppercase;
+               color: var(--muted); min-width: 62px; }
+.f { cursor: pointer; user-select: none; font-size: var(--text-md); padding: 2px 9px;
+     border: 1px solid var(--rule-strong); border-radius: var(--radius-2);
+     background: var(--sunk); }
+.f:hover { background: var(--card); }
+/* A selected filter is MAXIMUM INK, not the rail's slab colour. The rail and
+   the chip only ever shared --board by convenience, and in dark that made them
+   the same defect: --board sits 1.14:1 from --sunk, so "filter applied" and
+   "filter not applied" looked identical, with the SELECTED chip carrying less
+   definition than the unselected one (its border matched its own fill).
+   ink-on-paper separates the two states by 14.9:1 in light and 11.8:1 in dark
+   -- the same relationship in both themes, re-derived rather than inverted,
+   because "selected" means the same thing in both. */
+.f.on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+.f b { font-weight: 600; margin-left: 6px; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* Opacity, not a colour: the count needs to sit a step below its label on a
+   surface whose polarity flips between themes, and no single token does that. */
+.f.on b { opacity: .7; }
+.f:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* The way out, last: Reset was the sixth tab stop with twenty chips behind it,
+   so the keyboard reached "undo everything" before anything to undo. Its own
+   footer row puts DOM, reading and tab order back in agreement, with the live
+   count beside it because the count is what Reset restores. */
+.ctlfoot { display: flex; align-items: center; gap: var(--space-2);
+           margin-top: var(--space-3); padding-top: var(--space-2);
+           border-top: 1px solid var(--line); }
+#reset { margin-left: auto; font-size: var(--text-md); }
+#reset:focus-visible, #live:focus-visible { outline: 2px solid var(--accent);
+           outline-offset: 2px; border-radius: 3px; }
+#count { font-size: var(--text-md); color: var(--muted); }
+#count b { color: var(--ink); }
+
+/* --- the coverage explainer --------------------------------------------- */
+/* A footnote to the board, at the foot of the panel that governs it. Collapsed
+   and never coloured: a definition is not a state. See dashboard.ATS_HELP. */
+.explainer { margin-top: var(--space-3); padding-top: var(--space-2);
+       border-top: 1px solid var(--line); font-size: var(--text-md);
+       color: var(--muted); }
+.explainer summary { cursor: pointer; }
+.explainer summary:focus-visible { outline: 2px solid var(--accent);
+       outline-offset: 2px; }
+.explainer[open] summary { color: var(--ink); font-weight: 600; }
+.expbody p { margin: var(--space-2) 0 0; max-width: 74ch; line-height: 1.5; }
+.expbody b { color: var(--ink); }
+
+/* --- decisions: buttons, the pending badge, the token panel ------------- */
+/* Amber, and the same amber the clocks use for "not settled yet": a recorded
+   decision is a note in a file, not a status. The DB is still the source of
+   truth until sync.py folds it. */
+.pend-d { display: inline-block; margin-top: 3px; padding: 1px 6px; font-size: var(--text-sm);
+          font-weight: 600; white-space: normal; color: var(--warn);
+          background: var(--warn-bg); border: 1px solid var(--warn); border-radius: 3px; }
+.pend-d .cancel { margin-left: 6px; font-weight: 400; font-size: 10px; }
+/* ONE primary action per card at a size a thumb can hit, the rest one press
+   behind an overflow. Three 20px pills in a card corner asked a 3-way question
+   on every card, two of whose answers close a role out -- and they were the
+   smallest targets on a page that exists to press one. See action_buttons(). */
+.acts { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--space-1);
+        margin-top: 5px; white-space: normal; }
+.act { font: inherit; font-size: var(--text-md); line-height: 1.2; cursor: pointer;
+       min-height: 44px; padding: 0 var(--space-3);
+       color: var(--ink); background: var(--sunk); border: 1px solid var(--rule-strong);
+       border-radius: var(--radius-2); }
+.act:hover { background: var(--card); }
+.act:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* The forward move, in the page's one "go" colour. Never a closing action --
+   see NEGATIVE_ACTIONS in dashboard.py. */
+.act.pri { min-width: 44px; font-weight: 600; color: var(--go);
+           background: var(--go-bg); border-color: var(--go); }
+/* Closing a role out is a different kind of act: available, never inviting.
+   The --fail family as an edge and a word, no fill until the pointer lands. */
+.act.neg { color: var(--fail); border-color: var(--fail); background: transparent; }
+.act.neg:hover { background: var(--fail-bg); }
+.act[disabled] { opacity: .45; cursor: default; }
+/* Expands IN PLACE, never floating: between 641px and 1199px the board is an
+   overflow-x scroller that would clip an absolute panel. */
+.menu > summary { display: flex; align-items: center; justify-content: center;
+       min-width: 44px; min-height: 44px; list-style: none; cursor: pointer;
+       font-size: 15px; line-height: 1; color: var(--muted); background: var(--sunk);
+       border: 1px solid var(--rule-strong); border-radius: var(--radius-2); }
+.menu > summary::-webkit-details-marker { display: none; }
+.menu > summary:hover { background: var(--card); color: var(--ink); }
+.menu > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.mwrap { display: flex; flex-direction: column; gap: var(--space-1); margin-top: var(--space-1); }
+.mwrap .act { width: 100%; }
+.off { display: none; }
+#gear { display: inline-flex; align-items: center; justify-content: center;
+        min-width: 44px; min-height: 44px; font: inherit; font-size: 15px;
+        line-height: 1; cursor: pointer; color: var(--muted); background: var(--card);
+        border: 1px solid var(--rule-strong); border-radius: var(--radius-2); }
+#gear:hover { background: var(--hover); color: var(--ink); }
+#gear:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#live { font-size: var(--text-md); }
+.patbox { display: none; margin-top: 9px; padding: var(--space-2) 10px; font-size: var(--text-md);
+          background: var(--sunk); border: 1px solid var(--rule); border-radius: 4px; }
+.patbox.on { display: block; }
+.patbox .patmsg { color: var(--muted); margin-bottom: 6px; max-width: 620px; }
+.patbox input { font: inherit; width: 330px; max-width: 100%; padding: 5px var(--space-2);
+                margin-right: 6px; border: 1px solid var(--rule-strong); border-radius: 4px;
+                background: var(--card); color: var(--ink); }
+.patbox button { font: inherit; font-size: var(--text-md); padding: 4px 10px; cursor: pointer;
+                 color: var(--ink); background: var(--card);
+                 border: 1px solid var(--rule-strong); border-radius: 4px; }
+.patbox input:focus-visible, .patbox button:focus-visible {
+                 outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Fixed and out of the flow: a failed push must not reshuffle the board under
+   the cursor mid-triage, and it must stay visible while Vaish keeps clicking. */
+#err { display: none; position: fixed; right: 14px; bottom: 14px; z-index: 5;
+       max-width: 340px; padding: var(--space-2) 11px; font-size: var(--text-md);
+       color: var(--fail); background: var(--fail-bg); border: 1px solid var(--fail);
+       border-radius: var(--radius-1); }
+#err.on { display: block; }
+
+/* --- the queued-to-sync tray -------------------------------------------- */
+/* A decision already made is a receipt, not work. Its card leaves the column
+   -- which is what keeps "Ready 3" meaning three roles still waiting -- and
+   stands here, above the controls, because it is a thing that HAPPENED, read on
+   the way down to the work. Full rationale: dashboard.tray().
+   Amber EDGE on a card fill, never the amber slab -- the same correction the
+   attestations panel got (see .attest): a filled warn-bg band in this exact
+   position competes with the health strip for the same alarm and wins it,
+   which would make a receipt louder than a dead cron. */
+#tray { margin: var(--space-3) 0 0; padding: var(--space-2) var(--space-3) var(--space-3);
+        background: var(--card); border: 1px solid var(--warn);
+        border-radius: var(--radius-1); }
+/* Needed for the same reason .card[hidden] is: the rule above outranks the UA
+   stylesheet's [hidden], and an empty tray would then sit on the page forever. */
+#tray[hidden] { display: none; }
+.trayhead { display: flex; align-items: center; gap: var(--space-2);
+        flex-wrap: wrap; margin-bottom: var(--space-2); }
+.trayhead h2 { margin: 0; font-size: var(--text-lg); font-weight: 600; color: var(--warn); }
+.trayhead code { font-size: var(--text-md); }
+.trayn { font-variant-numeric: tabular-nums; }
+/* The two timescales, under the heading rather than inside it: a tray holds
+   decisions clicked seconds ago and decisions the build rendered from a file
+   pushed hours ago, and one sentence in the heading could only be true of one
+   of them. Its own line, outside .trayhead's flex row (dashboard.tray()). */
+.traynote { margin: calc(var(--space-2) * -1) 0 var(--space-2);
+        font-size: var(--text-md); color: var(--muted); }
+#traycancel { margin-left: auto; font: inherit; font-size: var(--text-md);
+        min-height: 44px; padding: 4px var(--space-3); cursor: pointer;
+        color: var(--ink); background: var(--card);
+        border: 1px solid var(--rule-strong); border-radius: var(--radius-2); }
+#traycancel:hover { background: var(--hover); }
+#traycancel:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* The archive's got-away rows carry a .stt too (gone_row), and they are a
+   READOUT, not a work surface -- a 44px target in a 31px list row would turn
+   six lines of "these expired" into a column of buttons. Compact there, full
+   size everywhere a card lives. */
+.gone .act, .gone .menu > summary { min-height: 26px; min-width: 26px;
+        font-size: var(--text-sm); padding: 0 var(--space-2); }
+/* Across, not down: the tray is a strip that must not push the board off the
+   screen when several decisions are queued. */
+#traycards { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: var(--space-2); margin-top: 0; align-items: start; }
+/* Neither the filter's .hide nor the cap's [hidden] may follow a card in
+   here: that would hide its cancel link. trayPut() clears both. */
+#traycards .card.hide, #traycards .card[hidden] { display: grid; }
+
+@media (max-width: 860px) {
+  body { padding: 14px var(--space-3) 48px; }
+  /* Nothing here hides CONTENT. The board stacks into one column at 640px and
+     every card keeps its company, role, location, tier, ATS and files -- the
+     old breakpoint dropped four table columns including the files link, which
+     is the one thing a phone read of this page is FOR.
+     The old `#reset { margin-left: 0 }` override went with the searchrow: Reset
+     has its own footer row now, so `margin-left: auto` is right at every width. */
+  /* The view toggle is a control, not content, and below 861px the list layout
+     it offers does not exist (board.css gates it there because the row's
+     minimum tracks measure 844px). A pressed LIST that renders the board is a
+     control lying about the page; better absent than false. */
+  .viewbar { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }

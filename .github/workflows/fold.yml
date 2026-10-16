@@ -1,0 +1,104 @@
+# Layer 2 fold in the cloud: runs sync.py --ci on every routine push (claude/judge*), so the
+# routine's scores, finished resumes and dashboard decisions reach the DB on main
+# without the laptop.
+#
+# Why (2026-10-06 health check): folding lived only on the laptop, while
+# detect.yml's freshness sweep runs every 2h in the cloud. With the laptop shut
+# down 10-01..10-04, 32 reviewed resumes sat on claude/judge-* while their rows
+# were still `new`, the sweep aged them to stale_skip, and the eventual fold
+# refused them ("stale_skip outranks a tailor sidecar"): a quarter of that
+# week's output never reached "Ready to submit".
+#
+# Writers of the DB: Actions only (detect + this), both with reset-and-redo push
+# races (never a rebase of the binary DB). The laptop publishes text records
+# (pipeline/localgit.py) and never writes the DB. A separate concurrency group, not
+# `detect`: GitHub cancels a PENDING run when another queues in the same group,
+# and a fold dropped behind a detect would wait for the next routine push.
+#
+# Trigger: push to claude/judge** evaluates THIS file on the pushed ref, which the
+# routine branched from main, so it applies from the first run after this lands.
+# The job checks out main itself. A routine run pushes 1-3 times, so ~3-9 folds
+# a day at ~1 min, plus one per local command, plus one from detect when dashboard
+# decisions are waiting (W7). The laptop
+# sync is retired (10-08), so nothing Word-checks pages; soffice measured one
+# page in the cloud.
+#
+# The dashboard is published by the last step of this job when the fold moved
+# main (2026-10-08; it used to be a separate workflow_run job per fold).
+
+name: fold
+
+on:
+  push:
+    # The routine's run branches, and (2026-10-08, laptop sync retired) main
+    # when a push carries records to fold: /tailor and /scan from the laptop,
+    # which publish sidecars and folders instead of writing the DB
+    # (pipeline/localgit.py). This workflow's own push and detect's use
+    # GITHUB_TOKEN, so neither re-fires it.
+    #
+    # NOT decisions/ (W7, 2026-10-13). A dashboard click or /mark writes
+    # decisions/pending.json; on 10-12 that was 81 pushes and 86 folds, ~190
+    # billed minutes, more than detection. Now a click costs no Actions time:
+    # every fold applies whatever is pending, and detect.yml dispatches one
+    # (workflow_dispatch below) when `decisions.py --foldable` says a fold would
+    # change something, so a click lands within about 2h. worklist.py keeps a
+    # pending skip off the tailor list meanwhile.
+    branches: ["claude/judge**", main]
+    # One filter for both: every routine push touches at least one of these,
+    # and a code or profile push to main touches none, so it never folds.
+    paths:
+      - scores/**
+      - tailored/**
+      - applications/**
+      - .claude/routines/judge-queue.notes.md
+  workflow_dispatch:
+
+concurrency:
+  group: fold
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  fold:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      PROD_ALIAS: your-dashboard.vercel.app
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          # sync.py pulls with --rebase, compares origin/main..HEAD and leases
+          # the run branches it deletes; all of that wants real history.
+          fetch-depth: 0
+          # ...of commits, not of file contents (W7, 2026-10-13): the full
+          # history of the binary jobs.sqlite made checkout 27s of a 77s fold,
+          # and GitHub bills whole minutes. Old blobs are fetched on demand.
+          filter: blob:none
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Fold the routine branches into main
+        id: fold
+        run: |
+          git config user.name "layer2-fold"
+          git config user.email "actions@users.noreply.github.com"
+          before=$(git rev-parse HEAD)
+          python pipeline/sync.py --force --ci
+          if [ "$(git rev-parse HEAD)" != "$before" ]; then
+            echo "moved=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Only when the fold changed main; a fold with nothing to take changes
+      # nothing on the page. A publish failure never fails the fold.
+      - name: Publish dashboard
+        if: steps.fold.outputs.moved == 'true'
+        continue-on-error: true
+        uses: ./.github/actions/publish-dashboard

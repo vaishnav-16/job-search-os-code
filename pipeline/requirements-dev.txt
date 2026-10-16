@@ -1,0 +1,7 @@
+# Test-suite dependencies.
+#
+# Most suites in pipeline/ are hand-rolled scripts runnable as
+# `python pipeline/test_age.py` with nothing installed. pytest is only needed
+# for the aggregate run, `python -m pytest pipeline -q`, which goes through
+# test_script_suites.py.
+pytest>=8.0

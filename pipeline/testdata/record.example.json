@@ -1,0 +1,39 @@
+{
+  "_comment": "EXAMPLE FIXTURE, read by test_parse_back.py for its title-variant checks, and OFFICIAL_TITLES / FUNCTIONAL_TITLES in pipeline/preflight.py match its variants. The real record lives at profile/knowledge/record.json and is not published. It is the canonical source for dates and sanctioned title variants; pipeline/parse_back.py diffs every rendered page against it, so a resume that invents a title or coarsens a date fails preflight. Employers, titles and dates below are invented.",
+  "work": [
+    {
+      "employer": "Example Bank",
+      "start": "2022-07",
+      "end": "2025-06",
+      "roles": [
+        {"title": "Product Owner", "start": "2024-10", "end": "2025-06",
+         "variants": ["Product Owner", "Product Owner, Payments", "Operations Associate II"]},
+        {"title": "Product Analyst", "start": "2023-08", "end": "2024-09",
+         "variants": ["Product Analyst", "Operations Associate I"]}
+      ]
+    },
+    {
+      "employer": "Acme Corp",
+      "start": "2026-06",
+      "end": "2026-08",
+      "roles": [
+        {"title": "Product Management Intern", "start": "2026-06", "end": "2026-08",
+         "variants": ["Product Management Intern", "Product Manager Intern"]}
+      ]
+    }
+  ],
+  "retired_claims": [
+    {"pattern": "first-contact resolution", "use": "self-serve resolution rate"}
+  ],
+  "education": [
+    {
+      "employer": "Example University",
+      "start": "2025-09",
+      "end": "2026-11",
+      "roles": [
+        {"title": "Master of Engineering Management", "start": "2025-09", "end": "2026-11",
+         "variants": ["Master of Engineering Management"]}
+      ]
+    }
+  ]
+}
